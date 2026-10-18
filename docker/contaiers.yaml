@@ -1,0 +1,65 @@
+# Prerequisite: docker network create caddy-network
+
+services:
+  caddy-server:
+    build:
+      context: .
+      dockerfile: CaddyBuilderDockerfile
+    image: caddy-duckdns:v1.0
+    container_name: caddy
+    restart: unless-stopped
+    networks:
+      - caddy-network
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - /mnt/docker/volumes/caddy-volume/conf:/etc/caddy:ro
+      - /mnt/docker/volumes/caddy-volume/data:/data
+      - /mnt/docker/volumes/caddy-volume/config:/config
+      - /mnt/docker/volumes/caddy-volume/site:/srv
+ 
+  vault-warden:
+    image: vaultwarden/server:1.37.3-alpine
+    container_name: vault-warden
+    restart: unless-stopped
+    environment:
+      - SIGNUPS_ALLOWED=false
+      - DOMAIN=https://vault.example.lan  # TODO: your real Caddy URL
+    networks:
+      - caddy-network
+    ports:
+      - "8080:80"  # TODO: remove once Caddy proxies to vault-warden:80
+    volumes:
+      - /mnt/docker/volumes/vault-warden/data:/data
+
+  jellyfin-server:
+    image: jellyfin/jellyfin:latest  # TODO: pin
+    container_name: jellyfin-server
+    restart: unless-stopped
+    networks:
+      - caddy-network
+    ports:
+      - "7359:7359/udp"
+      - "8096:8096"  # TODO: remove once Caddy proxies to jellyfin-server:8096
+    volumes:
+      - /mnt/docker/volumes/jellyfin-volume/config:/config
+      - /mnt/docker/volumes/jellyfin-volume/cache:/cache
+      - /mnt/docker/volumes/jellyfin-volume/media:/media:ro
+
+  dockhand:
+    image: fnsys/dockhand:latest  # TODO: pin
+    container_name: dockhand
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # ssh -L 3000:localhost:3000 <vm>
+    volumes:
+      - /mnt/docker/volumes/dockhand_data/_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+networks:
+  caddy-network:
+    external: true
